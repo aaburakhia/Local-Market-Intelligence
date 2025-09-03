@@ -5,8 +5,6 @@ from streamlit_folium import st_folium
 from io import StringIO
 from apify_client import ApifyClient
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 
 # --- App Configuration ---
 st.set_page_config(page_title="Local Market Intelligence", layout="wide")
@@ -41,6 +39,13 @@ st.markdown(
         border-radius: 50%; 
         margin-right: 10px; 
         border: 1px solid #ddd;
+    }
+    .insight-box {
+        background-color: #e8f4f8;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #1f77b4;
+        margin: 1rem 0;
     }
     </style>
     """,
@@ -137,26 +142,47 @@ if submit_button:
                         avg_reviews = df['Reviews Count'].mean()
                         st.metric("Avg Review Count", f"{avg_reviews:.0f}" if not pd.isna(avg_reviews) else "N/A")
                     
-                    # Charts
-                    col_chart1, col_chart2 = st.columns(2)
+                    # Market Analysis Insights
+                    st.subheader("🔍 Market Analysis")
                     
-                    with col_chart1:
-                        st.subheader("Rating Distribution")
-                        if not df['Stars'].isna().all():
-                            rating_bins = pd.cut(df['Stars'], bins=[0, 3.5, 4.0, 4.5, 5.0], 
-                                               labels=['Poor (<3.5)', 'Fair (3.5-4.0)', 'Good (4.0-4.5)', 'Excellent (4.5+)'])
-                            rating_counts = rating_bins.value_counts()
-                            fig_rating = px.pie(values=rating_counts.values, names=rating_counts.index,
-                                              color_discrete_map={'Poor (<3.5)': 'red', 'Fair (3.5-4.0)': 'orange',
-                                                                'Good (4.0-4.5)': 'yellow', 'Excellent (4.5+)': 'green'})
-                            st.plotly_chart(fig_rating, use_container_width=True)
+                    # Calculate insights
+                    rating_categories = {
+                        'Excellent (4.5+)': len(df[df['Stars'] >= 4.5]),
+                        'Good (4.0-4.4)': len(df[(df['Stars'] >= 4.0) & (df['Stars'] < 4.5)]),
+                        'Fair (3.5-3.9)': len(df[(df['Stars'] >= 3.5) & (df['Stars'] < 4.0)]),
+                        'Poor (<3.5)': len(df[df['Stars'] < 3.5])
+                    }
                     
-                    with col_chart2:
-                        st.subheader("Review Count Distribution")
-                        if not df['Reviews Count'].isna().all():
-                            fig_reviews = px.histogram(df, x='Reviews Count', nbins=20,
-                                                     title="Number of Reviews per Business")
-                            st.plotly_chart(fig_reviews, use_container_width=True)
+                    col_insight1, col_insight2 = st.columns(2)
+                    
+                    with col_insight1:
+                        st.markdown(f"""
+                        <div class="insight-box">
+                            <h4>🏆 Rating Distribution</h4>
+                            <ul>
+                                <li>Excellent (4.5+): {rating_categories['Excellent (4.5+)']} businesses</li>
+                                <li>Good (4.0-4.4): {rating_categories['Good (4.0-4.4)']} businesses</li>
+                                <li>Fair (3.5-3.9): {rating_categories['Fair (3.5-3.9)']} businesses</li>
+                                <li>Poor (<3.5): {rating_categories['Poor (<3.5)']} businesses</li>
+                            </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_insight2:
+                        top_rated = df.nlargest(3, 'Stars')[['Business Name', 'Stars', 'Reviews Count']]
+                        most_reviewed = df.nlargest(3, 'Reviews Count')[['Business Name', 'Stars', 'Reviews Count']]
+                        
+                        st.markdown(f"""
+                        <div class="insight-box">
+                            <h4>📈 Top Performers</h4>
+                            <p><strong>Highest Rated:</strong></p>
+                            <ul>
+                        """, unsafe_allow_html=True)
+                        
+                        for idx, row in top_rated.iterrows():
+                            st.markdown(f"<li>{row['Business Name']} ({row['Stars']}⭐, {int(row['Reviews Count'])} reviews)</li>", unsafe_allow_html=True)
+                        
+                        st.markdown("</ul></div>", unsafe_allow_html=True)
                     
                     # Map Generation
                     with st.spinner("Building interactive map..."):
