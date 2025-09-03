@@ -4,6 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from io import StringIO
 from apify_client import ApifyClient
+import numpy as np
 
 # --- App Configuration ---
 st.set_page_config(page_title="Local Market Intelligence", layout="wide")
@@ -33,32 +34,26 @@ if submit_button:
             with st.spinner(f"Scraping live data for '{full_search_query}'... This can take 1-2 minutes."):
                 apify_client = ApifyClient(st.secrets["APIFY_TOKEN"])
                 
-                # *** MOST IMPORTANT CHANGE: Input now matches your n8n setup ***
                 run_input = {
                     "searchStringsArray": [full_search_query],
-                    "maxResults": 10, # Using the correct name for the limit
+                    "max_results": 150, # Increased limit for better analysis
                 }
                 
                 actor_run = apify_client.actor("compass~crawler-google-places").call(run_input=run_input)
-                
                 items = [item for item in apify_client.dataset(actor_run["defaultDatasetId"]).iterate_items()]
                 
                 if not items:
                     st.error(f"No results found for '{full_search_query}'. The actor ran but returned no businesses. Please try a more specific location (e.g., 'London, Ontario').")
                 else:
                     df = pd.DataFrame(items)
-                    st.success(f"Found {len(df)} businesses.")
+                    st.success(f"Successfully found and processed {len(df)} businesses.")
 
-                    with st.spinner("Processing data and building map..."):
-                        # *** UPDATED COLUMN NAMES: Matching the output from your n8n screenshot ***
+                    with st.spinner("Building map..."):
                         df = df[['title', 'address', 'totalScore', 'reviewsCount', 'location']].rename(columns={
                             'title': 'Business Name', 'address': 'Address', 'totalScore': 'Stars', 'reviewsCount': 'Reviews Count'
                         })
-
-                        # Extract lat/lng from the 'location' column
-                        df['Latitude'] = df['location'].apply(lambda loc: loc.get('lat'))
-                        df['Longitude'] = df['location'].apply(lambda loc: loc.get('lng'))
-                        
+                        df['Latitude'] = df['location'].apply(lambda loc: loc.get('lat') if loc else None)
+                        df['Longitude'] = df['location'].apply(lambda loc: loc.get('lng') if loc else None)
                         df.dropna(subset=['Latitude', 'Longitude'], inplace=True)
                         df['Stars'] = pd.to_numeric(df['Stars'], errors='coerce')
                         df['Reviews Count'] = pd.to_numeric(df['Reviews Count'], errors='coerce').fillna(0)
@@ -68,7 +63,10 @@ if submit_button:
                             elif stars < 4.5: return 'orange'
                             else: return 'green'
                         df['Color'] = df['Stars'].apply(get_color)
-                        df['Size'] = 2 + df['Reviews Count'].apply(lambda x: x**0.5)
+                        
+                        # *** FIX: The new "Scaled Square Root" sizing algorithm ***
+                        # Base size of 4 + the square root of reviews, multiplied by a scaling factor of 0.3
+                        df['Size'] = df['Reviews Count'].apply(lambda x: 4 + (x**0.5) * 0.3)
 
                         center_lat = df['Latitude'].mean()
                         center_lon = df['Longitude'].mean()
@@ -84,11 +82,33 @@ if submit_button:
                             ).add_to(m)
                     
                     st.header("Interactive Market Map")
-                    st_folium(m, width=1200, height=700, returned_objects=[])
+                    st_folium(m, height=700, returned_objects=[])
+
+                    st.header("Legend")
+                    st.markdown("""
+                        <style>
+                            .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+                            .legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; border: 1px solid #ddd;}
+                        </style>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: green;"></div>
+                            Excellent Reputation (4.5+ Stars)
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: orange;"></div>
+                            Average Reputation (4.0 - 4.4 Stars)
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: red;"></div>
+                            Poor Reputation (< 4.0 Stars)
+                        </div>
+                        <br>
+                        &#8226; <b>Circle Size</b> corresponds to the number of online reviews (a proxy for visibility and traffic).
+                    """, unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
-            st.error("There might be an issue with the Apify Actor or your token. Please ensure the actor input format is correct.")
+            st.error("There might be an issue with the Apify Actor or your token. Please check the actor input format and your Streamlit Cloud secrets.")
 
 else:
     st.header("Sample Market Analysis")
