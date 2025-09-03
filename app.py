@@ -1,4 +1,3 @@
-# app.py (version 3 - with correct actor ID)
 import streamlit as st
 import pandas as pd
 import folium
@@ -34,29 +33,31 @@ if submit_button:
             with st.spinner(f"Scraping live data for '{full_search_query}'... This can take 1-2 minutes."):
                 apify_client = ApifyClient(st.secrets["APIFY_TOKEN"])
                 
+                # *** MOST IMPORTANT CHANGE: Input now matches your n8n setup ***
                 run_input = {
-                    "search_queries": [full_search_query], # This actor might use a different input name
-                    "limit": 10, # Limit for testing
+                    "searchStringsArray": [full_search_query],
+                    "maxResults": 10, # Using the correct name for the limit
                 }
                 
-                # *** THIS IS THE CORRECTED LINE ***
                 actor_run = apify_client.actor("compass~crawler-google-places").call(run_input=run_input)
                 
                 items = [item for item in apify_client.dataset(actor_run["defaultDatasetId"]).iterate_items()]
                 
                 if not items:
-                    st.error(f"No results found for '{full_search_query}'. Please try a different search.")
+                    st.error(f"No results found for '{full_search_query}'. The actor ran but returned no businesses. Please try a more specific location (e.g., 'London, Ontario').")
                 else:
                     df = pd.DataFrame(items)
                     st.success(f"Found {len(df)} businesses.")
 
                     with st.spinner("Processing data and building map..."):
-                        # IMPORTANT: Adjust column names to match the new actor's output
-                        # We are guessing the new column names here based on common patterns.
-                        df = df[['name', 'address', 'reviews', 'rating', 'latitude', 'longitude']].rename(columns={
-                            'name': 'Business Name', 'address': 'Address', 'reviews': 'Reviews Count',
-                            'rating': 'Stars', 'latitude': 'Latitude', 'longitude': 'Longitude'
+                        # *** UPDATED COLUMN NAMES: Matching the output from your n8n screenshot ***
+                        df = df[['title', 'address', 'totalScore', 'reviewsCount', 'location']].rename(columns={
+                            'title': 'Business Name', 'address': 'Address', 'totalScore': 'Stars', 'reviewsCount': 'Reviews Count'
                         })
+
+                        # Extract lat/lng from the 'location' column
+                        df['Latitude'] = df['location'].apply(lambda loc: loc.get('lat'))
+                        df['Longitude'] = df['location'].apply(lambda loc: loc.get('lng'))
                         
                         df.dropna(subset=['Latitude', 'Longitude'], inplace=True)
                         df['Stars'] = pd.to_numeric(df['Stars'], errors='coerce')
@@ -87,7 +88,7 @@ if submit_button:
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
-            st.error("This could be due to an issue with the Apify Actor or your token. Please check the actor name and the required input fields.")
+            st.error("There might be an issue with the Apify Actor or your token. Please ensure the actor input format is correct.")
 
 else:
     st.header("Sample Market Analysis")
