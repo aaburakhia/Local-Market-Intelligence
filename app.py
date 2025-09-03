@@ -1,4 +1,4 @@
-# app.py (version 2)
+# app.py (version 3 - with correct actor ID)
 import streamlit as st
 import pandas as pd
 import folium
@@ -13,19 +13,17 @@ st.write("Enter a business type and a location to generate a live competitive ma
 
 # --- User Input Fields ---
 with st.form(key='search_form'):
-    # We now use 3 columns for the input fields
     col1, col2, col3 = st.columns(3)
     with col1:
         business_type = st.text_input("Business Type", "dentist")
     with col2:
         city = st.text_input("City", "London")
     with col3:
-        # NEW: Added a country input for more specific searches
         country = st.text_input("Country", "Canada")
     
     submit_button = st.form_submit_button(label='Generate Live Map')
 
-# --- Main Logic: This runs only when the button is pressed ---
+# --- Main Logic ---
 if submit_button:
     if not business_type or not city or not country:
         st.warning("Please fill in all three fields.")
@@ -33,17 +31,16 @@ if submit_button:
         try:
             full_search_query = f"{business_type} in {city}, {country}"
             
-            # --- Step 1: Get Live Data from Apify ---
-            with st.spinner(f"Scraping live data for '{full_search_query}'... This may take a minute."):
+            with st.spinner(f"Scraping live data for '{full_search_query}'... This can take 1-2 minutes."):
                 apify_client = ApifyClient(st.secrets["APIFY_TOKEN"])
                 
                 run_input = {
-                    "searchStringsArray": [full_search_query],
-                    # MODIFIED: Limit set to 10 for testing to save tokens
-                    "maxCrawledPlacesPerSearch": 10,
+                    "search_queries": [full_search_query], # This actor might use a different input name
+                    "limit": 10, # Limit for testing
                 }
                 
-                actor_run = apify_client.actor("apify/google-maps-scraper").call(run_input=run_input)
+                # *** THIS IS THE CORRECTED LINE ***
+                actor_run = apify_client.actor("compass~crawler-google-places").call(run_input=run_input)
                 
                 items = [item for item in apify_client.dataset(actor_run["defaultDatasetId"]).iterate_items()]
                 
@@ -53,11 +50,12 @@ if submit_button:
                     df = pd.DataFrame(items)
                     st.success(f"Found {len(df)} businesses.")
 
-                    # --- Step 2: Prepare the Scraped Data ---
                     with st.spinner("Processing data and building map..."):
-                        df = df[['title', 'address', 'reviewsCount', 'stars', 'location.lat', 'location.lng']].rename(columns={
-                            'title': 'Business Name', 'address': 'Address', 'reviewsCount': 'Reviews Count',
-                            'stars': 'Stars', 'location.lat': 'Latitude', 'location.lng': 'Longitude'
+                        # IMPORTANT: Adjust column names to match the new actor's output
+                        # We are guessing the new column names here based on common patterns.
+                        df = df[['name', 'address', 'reviews', 'rating', 'latitude', 'longitude']].rename(columns={
+                            'name': 'Business Name', 'address': 'Address', 'reviews': 'Reviews Count',
+                            'rating': 'Stars', 'latitude': 'Latitude', 'longitude': 'Longitude'
                         })
                         
                         df.dropna(subset=['Latitude', 'Longitude'], inplace=True)
@@ -71,7 +69,6 @@ if submit_button:
                         df['Color'] = df['Stars'].apply(get_color)
                         df['Size'] = 2 + df['Reviews Count'].apply(lambda x: x**0.5)
 
-                        # --- Step 3: Create and Display the Map ---
                         center_lat = df['Latitude'].mean()
                         center_lon = df['Longitude'].mean()
                         
@@ -90,9 +87,8 @@ if submit_button:
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
-            st.error("This could be due to an invalid Apify Token or an issue with the data scraping. Please check your token in the Streamlit Cloud secrets.")
+            st.error("This could be due to an issue with the Apify Actor or your token. Please check the actor name and the required input fields.")
 
-# NEW: If the button has not been pressed, show the placeholder image
 else:
     st.header("Sample Market Analysis")
     st.image("sample.png", caption="A sample analysis map showing businesses in London, ON.")
