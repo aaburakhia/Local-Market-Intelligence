@@ -51,7 +51,7 @@ st.markdown("""
     margin: 1rem 0;
 }
 
-.legend-box {
+.legend-container {
     background: white;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -66,6 +66,16 @@ st.markdown("""
     padding: 1rem;
     border-radius: 8px;
     margin: 1rem 0;
+}
+
+.data-power-message {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    margin: 1rem 0;
+    font-size: 1.1em;
 }
 
 /* Hide Streamlit elements for professional look */
@@ -95,9 +105,27 @@ def render_header():
     <div class="main-header">
         <h1>🎯 Market Intelligence Pro</h1>
         <p style="font-size: 1.2em; margin: 0;">Real-time competitive analysis powered by AI</p>
-        <small>Generate professional market insights in minutes</small>
+        <small>Transform data into competitive advantage</small>
     </div>
     """, unsafe_allow_html=True)
+
+# --- Data Power Messages ---
+def show_data_power_messages(current_step, total_steps=3):
+    messages = [
+        "🔥 Data is your competitive superpower - Collecting market intelligence...",
+        "⚡ Transforming raw data into strategic insights...",
+        "🧠 AI is analyzing patterns humans miss - Almost ready!"
+    ]
+    
+    progress = current_step / total_steps
+    st.progress(progress)
+    
+    if current_step < len(messages):
+        st.markdown(f"""
+        <div class="data-power-message">
+            {messages[current_step]}
+        </div>
+        """, unsafe_allow_html=True)
 
 # --- Enhanced KPI Dashboard ---
 def render_kpi_dashboard(kpis, df):
@@ -202,101 +230,62 @@ def render_kpi_dashboard(kpis, df):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-# --- Enhanced AI Analysis with Better Prompting ---
-def generate_enhanced_analysis(df, business_type, city, country, kpis):
+# --- Geographic AI Analysis ---
+def generate_geographic_analysis(df, business_type, city, country):
     try:
-        # Prepare more detailed data for AI
-        top_performers = df.nlargest(5, 'Reviews Count')[['Business Name', 'Stars', 'Reviews Count']].to_dict('records')
-        rating_distribution = df['Stars'].round().value_counts().to_dict()
+        # Analyze geographic distribution
+        north_businesses = len(df[df['Latitude'] > df['Latitude'].median()])
+        south_businesses = len(df[df['Latitude'] <= df['Latitude'].median()])
+        east_businesses = len(df[df['Longitude'] > df['Longitude'].median()])
+        west_businesses = len(df[df['Longitude'] <= df['Longitude'].median()])
         
-        # Calculate market insights
-        avg_reviews = df['Reviews Count'].mean()
-        median_rating = df['Stars'].median()
-        competition_density = len(df)
+        # Find concentration areas
+        high_rated_north = len(df[(df['Latitude'] > df['Latitude'].median()) & (df['Stars'] >= 4.0)])
+        high_rated_south = len(df[(df['Latitude'] <= df['Latitude'].median()) & (df['Stars'] >= 4.0)])
         
-        enhanced_prompt = f"""
-You are a senior business strategy consultant specializing in local market analysis. Analyze this {business_type} market in {city}, {country}.
+        geographic_prompt = f"""
+You are analyzing the geographic distribution of {business_type} businesses in {city}, {country}.
 
-MARKET DATA:
-- Total Competitors: {kpis['Total Businesses']}
-- Average Rating: {kpis['Average Rating']}
-- Average Reviews: {avg_reviews:.1f}
-- Median Rating: {median_rating}
-- Market Leader: {kpis['Most Visible']}
+GEOGRAPHIC DATA:
+- Northern area: {north_businesses} businesses ({high_rated_north} highly rated 4.0+)
+- Southern area: {south_businesses} businesses
+- Eastern area: {east_businesses} businesses  
+- Western area: {west_businesses} businesses
+- Total businesses: {len(df)}
 
-TOP 5 COMPETITORS:
-{chr(10).join([f"• {p['Business Name']}: {p['Stars']}⭐ ({p['Reviews Count']} reviews)" for p in top_performers])}
+PROVIDE ONLY GEOGRAPHIC INSIGHTS:
 
-RATING BREAKDOWN:
-{chr(10).join([f"• {rating}⭐: {count} businesses" for rating, count in sorted(rating_distribution.items())])}
+## 🗺️ Geographic Market Analysis
 
-PROVIDE A COMPREHENSIVE ANALYSIS WITH:
+Focus on:
+- Where businesses are concentrated (north/south/east/west)
+- Areas with fewer competitors (opportunities)  
+- Quality distribution across different areas
+- Geographic gaps in coverage
 
-## 🎯 Executive Summary
-[2-3 sentences summarizing the market opportunity]
-
-## 📊 Market Landscape
-- Competition density assessment
-- Quality vs quantity analysis
-- Market maturity level
-
-## 💡 Key Opportunities
-- Specific gaps in the market
-- Underserved rating segments
-- Low-competition areas
-
-## ⚠️ Competitive Threats
-- Dominant players to watch
-- Market saturation indicators
-- Barriers to entry
-
-## 🚀 Strategic Recommendations
-- Market entry strategies
-- Differentiation opportunities
-- Target customer segments
-
-## 📈 Success Metrics to Track
-- KPIs for market penetration
-- Competitive benchmarks
-
-Keep analysis professional, data-driven, and actionable. Use specific numbers from the data provided.
+Keep it concise and map-focused. No general market analysis.
 """
         
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-2.0-flash-001')
         
-        # Add retry logic for robustness
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = model.generate_content(enhanced_prompt)
-                if response.text:
-                    return response.text
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    raise e
-                time.sleep(2)  # Wait before retry
+        response = model.generate_content(geographic_prompt)
+        return response.text if response.text else "Geographic analysis could not be generated."
         
     except Exception as e:
         return f"""
-## ⚠️ Analysis Generation Error
+## 🗺️ Geographic Distribution Overview
 
-We encountered an issue generating the detailed analysis: {str(e)}
+**Key Observations:**
+- Northern area: {north_businesses} businesses
+- Southern area: {south_businesses} businesses  
+- Eastern area: {east_businesses} businesses
+- Western area: {west_businesses} businesses
 
-### Quick Market Insights:
-- **Total Competitors:** {kpis['Total Businesses']} businesses found
-- **Market Leader:** {kpis['Most Visible']}
-- **Average Quality:** {kpis['Average Rating']}
-
-### Manual Analysis Recommendations:
-1. **Market Size:** {'Large' if kpis['Total Businesses'] > 100 else 'Medium' if kpis['Total Businesses'] > 50 else 'Small'} market with {kpis['Total Businesses']} competitors
-2. **Quality Level:** {'High' if float(kpis['Average Rating'].split()[0]) > 4.0 else 'Moderate'} average quality ({kpis['Average Rating']})
-3. **Opportunity Assessment:** Review individual competitors for gaps in service or location coverage
-
-*Please try refreshing the analysis or contact support if this persists.*
+**Opportunities:** Areas with fewer competitors may present expansion opportunities.
 """
 
-# --- Enhanced Map with Professional Legend ---
+# --- Enhanced Map with Clean Tooltips ---
 def create_enhanced_map(df):
     if len(df) == 0:
         return None
@@ -328,25 +317,20 @@ def create_enhanced_map(df):
         elif reviews >= 20: return 6
         else: return 4
     
-    # Add markers with enhanced popups
+    # Add markers with clean popups
     for idx, row in df.iterrows():
         rating = row['Stars'] if pd.notna(row['Stars']) else 0
         reviews = int(row['Reviews Count']) if pd.notna(row['Reviews Count']) else 0
         
         popup_html = f"""
-        <div style="min-width: 200px; font-family: Arial;">
-            <h4 style="margin: 0; color: #2c3e50;">{row['Business Name']}</h4>
+        <div style="min-width: 180px; font-family: Arial; text-align: center;">
+            <h4 style="margin: 0; color: #2c3e50; font-size: 14px;">{row['Business Name']}</h4>
             <hr style="margin: 8px 0;">
-            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-                <span><b>Rating:</b></span>
-                <span style="color: {get_color(rating)};">{rating}⭐</span>
+            <div style="font-size: 16px; color: {get_color(rating)};">
+                <strong>{rating}⭐</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-                <span><b>Reviews:</b></span>
-                <span>{reviews:,}</span>
-            </div>
-            <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                <b>Address:</b><br>{row.get('Address', 'N/A')}
+            <div style="font-size: 14px; color: #666; margin-top: 5px;">
+                {reviews:,} reviews
             </div>
         </div>
         """
@@ -354,7 +338,7 @@ def create_enhanced_map(df):
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=get_size(reviews),
-            popup=folium.Popup(popup_html, max_width=300),
+            popup=folium.Popup(popup_html, max_width=250),
             color='white',
             weight=2,
             fillColor=get_color(rating),
@@ -364,56 +348,33 @@ def create_enhanced_map(df):
     
     return m
 
-# --- Professional Legend Component ---
+# --- Clean Map Legend ---
 def render_map_legend():
-    st.markdown("""
-    <div class="legend-box">
-        <h4 style="margin: 0 0 1rem 0; color: #2c3e50;">🗺️ Map Legend</h4>
-        
-        <div style="margin-bottom: 1rem;">
-            <h5 style="margin: 0.5rem 0; color: #34495e;">Rating Colors:</h5>
-            <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-                <span>🟢 4.5+ Excellent</span>
-                <span style="color: #2ecc71;">🟢 4.0+ Very Good</span>
-                <span style="color: #f1c40f;">🟡 3.5+ Good</span>
-                <span style="color: #e67e22;">🟠 3.0+ Fair</span>
-                <span style="color: #e74c3c;">🔴 <3.0 Poor</span>
-            </div>
-        </div>
-        
-        <div>
-            <h5 style="margin: 0.5rem 0; color: #34495e;">Circle Sizes (Review Volume):</h5>
-            <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-                <span>⚫ 200+ Dominant</span>
-                <span>🔵 100+ Established</span>
-                <span>🟤 50+ Growing</span>
-                <span>🟡 20+ Moderate</span>
-                <span>⚪ <20 New</span>
-            </div>
-        </div>
-        
-        <div style="margin-top: 1rem; padding: 0.5rem; background: #ecf0f1; border-radius: 5px;">
-            <small><b>💡 Pro Tip:</b> Click on any circle to see detailed business information!</small>
-        </div>
+    st.markdown("### 🗺️ Map Legend")
+    
+    st.markdown("**Rating Colors:**")
+    legend_html = """
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+        <span style="color: #27ae60;">🟢 4.5+ Excellent</span>
+        <span style="color: #2ecc71;">🟢 4.0+ Very Good</span>
+        <span style="color: #f1c40f;">🟡 3.5+ Good</span>
+        <span style="color: #e67e22;">🟠 3.0+ Fair</span>
+        <span style="color: #e74c3c;">🔴 <3.0 Poor</span>
     </div>
-    """, unsafe_allow_html=True)
-
-# --- Progress Bar Component ---
-def show_progress_steps(current_step, total_steps=3):
-    steps = ["🔍 Data Collection", "📊 Processing", "🧠 AI Analysis"]
-    progress = current_step / total_steps
+    """
+    st.markdown(legend_html, unsafe_allow_html=True)
     
-    st.progress(progress)
-    
-    cols = st.columns(3)
-    for i, (col, step) in enumerate(zip(cols, steps)):
-        with col:
-            if i < current_step:
-                st.success(f"✅ {step}")
-            elif i == current_step:
-                st.info(f"⏳ {step}")
-            else:
-                st.write(f"⏸️ {step}")
+    st.markdown("**Circle Sizes (Review Volume):**")
+    size_html = """
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <span>⚫ 200+ Dominant</span>
+        <span>🔵 100+ Established</span>
+        <span>🟤 50+ Growing</span>
+        <span>🟡 20+ Moderate</span>
+        <span>⚪ <20 New</span>
+    </div>
+    """
+    st.markdown(size_html, unsafe_allow_html=True)
 
 # --- MAIN APPLICATION ---
 countries = get_country_list()
@@ -423,14 +384,16 @@ render_header()
 # --- Session State Initialization ---
 if 'map_data' not in st.session_state:
     st.session_state.map_data = None
-if 'analysis' not in st.session_state:
-    st.session_state.analysis = None
+if 'geographic_analysis' not in st.session_state:
+    st.session_state.geographic_analysis = None
 if 'kpis' not in st.session_state:
     st.session_state.kpis = None
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'last_search' not in st.session_state:
     st.session_state.last_search = None
+if 'show_detailed_analysis' not in st.session_state:
+    st.session_state.show_detailed_analysis = False
 
 # --- Enhanced User Input Form ---
 st.markdown("### 🔍 Market Research Parameters")
@@ -452,22 +415,6 @@ with st.form(key='search_form'):
     with col3:
         city = st.text_input("City", placeholder="e.g., Toronto, Vancouver")
     
-    # Quick search templates
-    st.markdown("**Quick Templates:**")
-    template_col1, template_col2, template_col3, template_col4 = st.columns(4)
-    with template_col1:
-        if st.form_submit_button("🦷 Dental Practice", use_container_width=True):
-            business_type = "dentist"
-    with template_col2:
-        if st.form_submit_button("🔧 Home Services", use_container_width=True):
-            business_type = "plumber"
-    with template_col3:
-        if st.form_submit_button("🍕 Restaurants", use_container_width=True):
-            business_type = "restaurant"
-    with template_col4:
-        if st.form_submit_button("💄 Beauty Salon", use_container_width=True):
-            business_type = "beauty salon"
-    
     submit_button = st.form_submit_button(
         label='🚀 Generate Market Intelligence',
         use_container_width=True,
@@ -481,21 +428,22 @@ if submit_button:
     else:
         # Clear previous results
         st.session_state.map_data = None
-        st.session_state.analysis = None
+        st.session_state.geographic_analysis = None
         st.session_state.kpis = None
         st.session_state.df = None
+        st.session_state.show_detailed_analysis = False
         
         search_query = f"{business_type} in {city}, {country}"
         st.session_state.last_search = search_query
         
-        # Progress tracking
+        # Progress tracking with data power messages
         progress_container = st.container()
         
         try:
             with progress_container:
-                show_progress_steps(0)
+                show_data_power_messages(0)
                 
-            with st.spinner(f"🔍 Step 1/3: Collecting live data for '{search_query}'..."):
+            with st.spinner("🔍 Collecting market intelligence..."):
                 apify_client = ApifyClient(st.secrets["APIFY_TOKEN"])
                 run_input = {
                     "searchStringsArray": [search_query], 
@@ -506,12 +454,12 @@ if submit_button:
                 items = [item for item in apify_client.dataset(actor_run["defaultDatasetId"]).iterate_items()]
                 
             progress_container.empty()
-            show_progress_steps(1)
+            show_data_power_messages(1)
             
             if not items:
                 st.error(f"❌ No results found for '{search_query}'. Try a different business type or location.")
             else:
-                with st.spinner("📊 Step 2/3: Processing and analyzing data..."):
+                with st.spinner("⚡ Processing competitive intelligence..."):
                     df = pd.DataFrame(items)
                     
                     # Enhanced data processing
@@ -543,48 +491,24 @@ if submit_button:
                     st.session_state.df = df
                 
                 progress_container.empty()
-                show_progress_steps(2)
+                show_data_power_messages(2)
                 
-                with st.spinner("🧠 Step 3/3: Generating AI-powered market analysis..."):
-                    st.session_state.analysis = generate_enhanced_analysis(
-                        df, business_type, city, country, st.session_state.kpis
+                with st.spinner("🧠 Generating geographic insights..."):
+                    st.session_state.geographic_analysis = generate_geographic_analysis(
+                        df, business_type, city, country
                     )
                     st.session_state.map_data = create_enhanced_map(df)
                 
                 progress_container.empty()
-                show_progress_steps(3)
-                st.success(f"✅ Analysis complete! Found {len(df)} businesses and generated comprehensive insights.")
+                st.success(f"✅ Intelligence gathered! Found {len(df)} businesses - Data is your superpower! 🔥")
 
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
             st.info("💡 This might be due to API limits or connectivity issues. Please try again in a few minutes.")
 
-# --- Display Results ---
-if st.session_state.kpis and st.session_state.df is not None:
-    render_kpi_dashboard(st.session_state.kpis, st.session_state.df)
-
-if st.session_state.analysis:
-    st.markdown("""
-    <div class="analysis-container">
-    """, unsafe_allow_html=True)
-    st.markdown("### 🧠 AI-Powered Market Analysis")
-    st.markdown(st.session_state.analysis)
-    
-    # Add analysis metadata
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.caption(f"📅 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    with col2:
-        st.caption(f"🔍 Query: {st.session_state.last_search}")
-    with col3:
-        if st.button("📥 Export Report", help="Feature coming soon!"):
-            st.info("Export functionality will be available in the premium version!")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
+# --- Display Map First ---
 if st.session_state.map_data:
-    st.markdown("### 🗺️ Interactive Market Map")
+    st.markdown("### 🗺️ Market Intelligence Map")
     
     # Map and legend in columns
     col1, col2 = st.columns([3, 1])
@@ -595,25 +519,22 @@ if st.session_state.map_data:
     with col2:
         render_map_legend()
     
-    # Add map insights
-    if st.session_state.df is not None:
-        st.markdown("""
-        <div class="insight-highlight">
-            <h5>🎯 Quick Map Insights:</h5>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        insight_col1, insight_col2 = st.columns(2)
-        with insight_col1:
-            high_rated = len(st.session_state.df[st.session_state.df['Stars'] >= 4.0])
-            st.metric("High-Rated Locations", f"{high_rated}/{len(st.session_state.df)}")
-        
-        with insight_col2:
-            established = len(st.session_state.df[st.session_state.df['Reviews Count'] >= 50])
-            st.metric("Established Players", f"{established}/{len(st.session_state.df)}")
+    # Geographic Analysis
+    if st.session_state.geographic_analysis:
+        st.markdown(st.session_state.geographic_analysis)
+    
+    # Run Deeper Analysis Button
+    st.markdown("---")
+    if st.button("📊 Run Deeper Analysis", use_container_width=True, type="secondary"):
+        st.session_state.show_detailed_analysis = True
+        st.rerun()
 
-else:
-    # Professional placeholder
+# --- Detailed Analysis (Only shown after button click) ---
+if st.session_state.show_detailed_analysis and st.session_state.kpis and st.session_state.df is not None:
+    render_kpi_dashboard(st.session_state.kpis, st.session_state.df)
+
+# --- Placeholder when no data ---
+if not st.session_state.map_data:
     st.markdown("### 🎯 Market Intelligence Preview")
     placeholder_col1, placeholder_col2, placeholder_col3 = st.columns([1, 2, 1])
     with placeholder_col2:
@@ -621,8 +542,8 @@ else:
                  caption="Enter your search parameters above to generate live market intelligence")
         st.markdown("""
         <div style="text-align: center; color: #666; margin-top: 1rem;">
-            <p>🔍 Real-time competitor discovery</p>
-            <p>📊 Interactive market visualization</p>
-            <p>🧠 AI-powered strategic insights</p>
+            <p>🔥 Transform data into competitive advantage</p>
+            <p>🗺️ Interactive geographic analysis</p>
+            <p>⚡ AI-powered market insights</p>
         </div>
         """, unsafe_allow_html=True)
