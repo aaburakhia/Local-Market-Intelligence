@@ -1,8 +1,9 @@
-streamlit
-pandas
-folium
-streamlit-folium
-apify-client
-numpy
-google-generativeai
-pycountry
+streamlit>=1.28.0
+pandas>=1.5.0
+folium>=0.14.0
+streamlit-folium>=0.13.0
+apify-client>=1.6.0
+google-generativeai>=0.3.0
+pycountry>=22.9.0
+plotly>=5.15.0
+numpy>=1.24.0
