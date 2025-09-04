@@ -3,3 +3,5 @@ pandas
 folium
 streamlit-folium
 apify-client
+numpy
+google-generativeai
