@@ -5,3 +5,4 @@ streamlit-folium
 apify-client
 numpy
 google-generativeai
+pycountry
