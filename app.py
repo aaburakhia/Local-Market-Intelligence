@@ -233,56 +233,74 @@ def render_kpi_dashboard(kpis, df):
 # --- Geographic AI Analysis ---
 def generate_geographic_analysis(df, business_type, city, country):
     try:
-        # Analyze geographic distribution
-        north_businesses = len(df[df['Latitude'] > df['Latitude'].median()])
-        south_businesses = len(df[df['Latitude'] <= df['Latitude'].median()])
-        east_businesses = len(df[df['Longitude'] > df['Longitude'].median()])
-        west_businesses = len(df[df['Longitude'] <= df['Longitude'].median()])
+        # Analyze geographic distribution with specific data
+        center_lat, center_lng = df['Latitude'].median(), df['Longitude'].median()
+        north_businesses = len(df[df['Latitude'] > center_lat])
+        south_businesses = len(df[df['Latitude'] <= center_lat])
+        east_businesses = len(df[df['Longitude'] > center_lng])
+        west_businesses = len(df[df['Longitude'] <= center_lng])
         
-        # Find concentration areas
-        high_rated_north = len(df[(df['Latitude'] > df['Latitude'].median()) & (df['Stars'] >= 4.0)])
-        high_rated_south = len(df[(df['Latitude'] <= df['Latitude'].median()) & (df['Stars'] >= 4.0)])
+        # Quality analysis by area
+        north_avg_rating = df[df['Latitude'] > center_lat]['Stars'].mean()
+        south_avg_rating = df[df['Latitude'] <= center_lat]['Stars'].mean()
+        
+        # Find top performer
+        top_performer = df.loc[df['Reviews Count'].idxmax()]
+        
+        # Find areas with fewer businesses (opportunities)
+        areas = [
+            ("Northern", north_businesses),
+            ("Southern", south_businesses), 
+            ("Eastern", east_businesses),
+            ("Western", west_businesses)
+        ]
+        areas.sort(key=lambda x: x[1])
+        least_competitive = areas[0]
+        most_competitive = areas[-1]
         
         geographic_prompt = f"""
-You are analyzing the geographic distribution of {business_type} businesses in {city}, {country}.
+Analyze the geographic distribution of {business_type} businesses in {city}, {country}.
 
-GEOGRAPHIC DATA:
-- Northern area: {north_businesses} businesses ({high_rated_north} highly rated 4.0+)
-- Southern area: {south_businesses} businesses
-- Eastern area: {east_businesses} businesses  
-- Western area: {west_businesses} businesses
-- Total businesses: {len(df)}
+SPECIFIC DATA:
+- Northern {city}: {north_businesses} businesses (avg rating: {north_avg_rating:.1f}⭐)
+- Southern {city}: {south_businesses} businesses (avg rating: {south_avg_rating:.1f}⭐)
+- Eastern {city}: {east_businesses} businesses
+- Western {city}: {west_businesses} businesses
+- Market leader: {top_performer['Business Name']} ({top_performer['Reviews Count']:.0f} reviews)
+- Least competitive area: {least_competitive[0]} {city} ({least_competitive[1]} businesses)
+- Most competitive area: {most_competitive[0]} {city} ({most_competitive[1]} businesses)
 
-PROVIDE ONLY GEOGRAPHIC INSIGHTS:
+PROVIDE SPECIFIC GEOGRAPHIC INSIGHTS FOR {city.upper()}:
 
-## 🗺️ Geographic Market Analysis
+## 🗺️ {city} Market Distribution
 
-Focus on:
-- Where businesses are concentrated (north/south/east/west)
-- Areas with fewer competitors (opportunities)  
-- Quality distribution across different areas
-- Geographic gaps in coverage
+- **Concentration Patterns:** Where are most {business_type}s located in {city}?
+- **Opportunity Zones:** Which areas of {city} have fewer competitors?
+- **Quality Distribution:** How do ratings vary across {city}?
+- **Strategic Locations:** Best areas for new {business_type} in {city}?
 
-Keep it concise and map-focused. No general market analysis.
+Be specific to {city} geography and use the actual data provided.
 """
         
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-2.0-flash-001')
         
         response = model.generate_content(geographic_prompt)
-        return response.text if response.text else "Geographic analysis could not be generated."
+        return response.text if response.text else f"Could not generate analysis for {city}."
         
     except Exception as e:
         return f"""
-## 🗺️ Geographic Distribution Overview
+## 🗺️ {city} Geographic Distribution
 
-**Key Observations:**
-- Northern area: {north_businesses} businesses
-- Southern area: {south_businesses} businesses  
-- Eastern area: {east_businesses} businesses
-- Western area: {west_businesses} businesses
+**Market Concentration:**
+- Northern {city}: {north_businesses} {business_type} businesses
+- Southern {city}: {south_businesses} {business_type} businesses  
+- Eastern {city}: {east_businesses} {business_type} businesses
+- Western {city}: {west_businesses} {business_type} businesses
 
-**Opportunities:** Areas with fewer competitors may present expansion opportunities.
+**Key Opportunity:** {least_competitive[0]} {city} has the fewest competitors ({least_competitive[1]} businesses), while {most_competitive[0]} {city} is most saturated ({most_competitive[1]} businesses).
+
+**Market Leader:** {top_performer['Business Name']} dominates with {top_performer['Reviews Count']:.0f} reviews.
 """
 
 # --- Enhanced Map with Clean Tooltips ---
