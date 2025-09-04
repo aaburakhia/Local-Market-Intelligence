@@ -172,9 +172,9 @@ def render_kpi_dashboard(kpis, df):
         opp_color = "#27ae60" if opportunity_score >= 7 else "#f39c12" if opportunity_score >= 5 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-container">
-            <h3 style="color: {opp_color}; margin: 0;">💡 Opportunity Score</h3>
+            <h3 style="color: {opp_color}; margin: 0;">💡 Market Opportunity</h3>
             <h2 style="margin: 0.5rem 0; color: {opp_color};">{opportunity_score:.1f}/10</h2>
-            <small style="color: #666;">{low_review} businesses with &lt;10 reviews</small>
+            <small style="color: #666;">{opportunity_desc}</small>
         </div>
         """, unsafe_allow_html=True)
 
