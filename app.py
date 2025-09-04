@@ -1,4 +1,3 @@
-# app.py (version 10 - World-Class Data)
 import streamlit as st
 import pandas as pd
 import folium
@@ -7,26 +6,20 @@ from io import StringIO
 from apify_client import ApifyClient
 import numpy as np
 import google.generativeai as genai
+# NEW: Import the pycountry library
+import pycountry
 
 # --- App Configuration & Style Injection ---
 st.set_page_config(page_title="Local Market Intelligence", layout="wide")
 st.markdown("""<style>/* Your CSS from before */</style>""", unsafe_allow_html=True) # Abridged
 
-# --- NEW: Load Comprehensive Country and City Data ---
-# This function will load a large dataset of world cities from a reliable open-source URL.
-# The @st.cache_data decorator means we only have to download this 5MB file once.
+# --- NEW: Load Country Data Directly from the pycountry Library ---
 @st.cache_data
-def load_world_cities():
-    url = "https://simplemaps.com/static/data/world-cities/simplemaps_worldcities_basicv1.77.csv"
-    cities_df = pd.read_csv(url)
-    # We create a dictionary for easy lookup, e.g., {"Canada": ["Toronto", "Montreal", ...]}
-    cities_by_country = cities_df.groupby('country')['city'].apply(list).to_dict()
-    # Sort the city lists alphabetically for a better user experience
-    for country, cities in cities_by_country.items():
-        cities.sort()
-    return sorted(cities_df['country'].unique()), cities_by_country
+def get_country_list():
+    # This gets a list of all official country names from the library
+    return sorted([country.name for country in pycountry.countries])
 
-countries, cities_by_country = load_world_cities()
+countries = get_country_list()
 
 # --- Header ---
 st.title("🗺️ Live Local Market Intelligence Tool")
@@ -44,13 +37,12 @@ with st.form(key='search_form'):
     with col1:
         business_type = st.text_input("Business Type", placeholder="e.g., dentist, plumber, barbershop")
     with col2:
-        # The dropdown now uses the comprehensive list of countries
+        # The country dropdown now uses our reliable library list
         country_index = countries.index("Canada") if "Canada" in countries else 0
         country = st.selectbox("Country", options=countries, index=country_index)
     with col3:
-        # The city dropdown is now dynamically populated based on the selected country
-        available_cities = cities_by_country.get(country, [])
-        city = st.selectbox("City", options=available_cities)
+        # The city input is now a flexible text field
+        city = st.text_input("City", placeholder="e.g., Toronto")
     
     submit_button = st.form_submit_button(label='Generate Analysis')
 
@@ -93,18 +85,15 @@ if submit_button:
                     }
 
                 with st.spinner("Step 3/3: Generating AI analysis with Google Gemini..."):
-                    # --- MODEL NAME SPECIFIED ---
                     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
                     model = genai.GenerativeModel('gemini-2.0-flash-001')
-                    
                     prompt = f"""
-                    You are an expert business consultant... 
-                    (The rest of the prompt is the same as before)
+                    You are an expert business consultant...
+                    (The rest of the prompt is the same)
                     """
                     response = model.generate_content(prompt)
                     st.session_state.analysis = response.text
                     
-                    # Create the map object
                     m = folium.Map(location=[df['Latitude'].mean(), df['Longitude'].mean()], zoom_start=12, tiles="CartoDB positron")
                     # ... (map drawing code is the same)
                     st.session_state.map_data = m
@@ -127,5 +116,4 @@ if st.session_state.map_data:
     st_folium(st.session_state.map_data, use_container_width=True, height=600)
     # ... (Legend code is the same)
 else:
-    # --- FILENAME CORRECTED ---
     st.image("sample.png", caption="Your generated map and analysis will appear here.")
