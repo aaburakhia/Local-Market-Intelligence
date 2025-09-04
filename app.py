@@ -172,9 +172,9 @@ def render_kpi_dashboard(kpis, df):
         opp_color = "#27ae60" if opportunity_score >= 7 else "#f39c12" if opportunity_score >= 5 else "#e74c3c"
         st.markdown(f"""
         <div class="metric-container">
-            <h3 style="color: {opp_color}; margin: 0;">💡 Market Opportunity</h3>
+            <h3 style="color: {opp_color}; margin: 0;">💡 Opportunity Score</h3>
             <h2 style="margin: 0.5rem 0; color: {opp_color};">{opportunity_score:.1f}/10</h2>
-            <small style="color: #666;">{opportunity_desc}</small>
+            <small style="color: #666;">{low_review} businesses with &lt;10 reviews</small>
         </div>
         """, unsafe_allow_html=True)
 
@@ -233,74 +233,56 @@ def render_kpi_dashboard(kpis, df):
 # --- Geographic AI Analysis ---
 def generate_geographic_analysis(df, business_type, city, country):
     try:
-        # Analyze geographic distribution with specific data
-        center_lat, center_lng = df['Latitude'].median(), df['Longitude'].median()
-        north_businesses = len(df[df['Latitude'] > center_lat])
-        south_businesses = len(df[df['Latitude'] <= center_lat])
-        east_businesses = len(df[df['Longitude'] > center_lng])
-        west_businesses = len(df[df['Longitude'] <= center_lng])
+        # Analyze geographic distribution
+        north_businesses = len(df[df['Latitude'] > df['Latitude'].median()])
+        south_businesses = len(df[df['Latitude'] <= df['Latitude'].median()])
+        east_businesses = len(df[df['Longitude'] > df['Longitude'].median()])
+        west_businesses = len(df[df['Longitude'] <= df['Longitude'].median()])
         
-        # Quality analysis by area
-        north_avg_rating = df[df['Latitude'] > center_lat]['Stars'].mean()
-        south_avg_rating = df[df['Latitude'] <= center_lat]['Stars'].mean()
-        
-        # Find top performer
-        top_performer = df.loc[df['Reviews Count'].idxmax()]
-        
-        # Find areas with fewer businesses (opportunities)
-        areas = [
-            ("Northern", north_businesses),
-            ("Southern", south_businesses), 
-            ("Eastern", east_businesses),
-            ("Western", west_businesses)
-        ]
-        areas.sort(key=lambda x: x[1])
-        least_competitive = areas[0]
-        most_competitive = areas[-1]
+        # Find concentration areas
+        high_rated_north = len(df[(df['Latitude'] > df['Latitude'].median()) & (df['Stars'] >= 4.0)])
+        high_rated_south = len(df[(df['Latitude'] <= df['Latitude'].median()) & (df['Stars'] >= 4.0)])
         
         geographic_prompt = f"""
-Analyze the geographic distribution of {business_type} businesses in {city}, {country}.
+You are analyzing the geographic distribution of {business_type} businesses in {city}, {country}.
 
-SPECIFIC DATA:
-- Northern {city}: {north_businesses} businesses (avg rating: {north_avg_rating:.1f}⭐)
-- Southern {city}: {south_businesses} businesses (avg rating: {south_avg_rating:.1f}⭐)
-- Eastern {city}: {east_businesses} businesses
-- Western {city}: {west_businesses} businesses
-- Market leader: {top_performer['Business Name']} ({top_performer['Reviews Count']:.0f} reviews)
-- Least competitive area: {least_competitive[0]} {city} ({least_competitive[1]} businesses)
-- Most competitive area: {most_competitive[0]} {city} ({most_competitive[1]} businesses)
+GEOGRAPHIC DATA:
+- Northern area: {north_businesses} businesses ({high_rated_north} highly rated 4.0+)
+- Southern area: {south_businesses} businesses
+- Eastern area: {east_businesses} businesses  
+- Western area: {west_businesses} businesses
+- Total businesses: {len(df)}
 
-PROVIDE SPECIFIC GEOGRAPHIC INSIGHTS FOR {city.upper()}:
+PROVIDE ONLY GEOGRAPHIC INSIGHTS:
 
-## 🗺️ {city} Market Distribution
+## 🗺️ Geographic Market Analysis
 
-- **Concentration Patterns:** Where are most {business_type}s located in {city}?
-- **Opportunity Zones:** Which areas of {city} have fewer competitors?
-- **Quality Distribution:** How do ratings vary across {city}?
-- **Strategic Locations:** Best areas for new {business_type} in {city}?
+Focus on:
+- Where businesses are concentrated (north/south/east/west)
+- Areas with fewer competitors (opportunities)  
+- Quality distribution across different areas
+- Geographic gaps in coverage
 
-Be specific to {city} geography and use the actual data provided.
+Keep it concise and map-focused. No general market analysis.
 """
         
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-2.0-flash-001')
         
         response = model.generate_content(geographic_prompt)
-        return response.text if response.text else f"Could not generate analysis for {city}."
+        return response.text if response.text else "Geographic analysis could not be generated."
         
     except Exception as e:
         return f"""
-## 🗺️ {city} Geographic Distribution
+## 🗺️ Geographic Distribution Overview
 
-**Market Concentration:**
-- Northern {city}: {north_businesses} {business_type} businesses
-- Southern {city}: {south_businesses} {business_type} businesses  
-- Eastern {city}: {east_businesses} {business_type} businesses
-- Western {city}: {west_businesses} {business_type} businesses
+**Key Observations:**
+- Northern area: {north_businesses} businesses
+- Southern area: {south_businesses} businesses  
+- Eastern area: {east_businesses} businesses
+- Western area: {west_businesses} businesses
 
-**Key Opportunity:** {least_competitive[0]} {city} has the fewest competitors ({least_competitive[1]} businesses), while {most_competitive[0]} {city} is most saturated ({most_competitive[1]} businesses).
-
-**Market Leader:** {top_performer['Business Name']} dominates with {top_performer['Reviews Count']:.0f} reviews.
+**Opportunities:** Areas with fewer competitors may present expansion opportunities.
 """
 
 # --- Enhanced Map with Clean Tooltips ---
